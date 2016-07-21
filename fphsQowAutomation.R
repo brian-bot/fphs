@@ -26,7 +26,9 @@ qowSchedules <- do.call(rbind, qowSchedules)
 ## KEEP ONLY THOSE WHICH HAVE COMPLETED
 qowSchedules <- qowSchedules[ qowSchedules$endDate < Sys.Date(), ]
 
-qowSchedulesResults <- lapply(as.list(1:nrow(qowSchedules)), function(y){
+## LOOK THROUGH SCHEDULES - AND COUNT THE NUMBER THAT WE WRITE TO BRIDGE
+nn <- as.integer(0)
+for(y in 1:nrow(qowSchedules)){
   x <- qowSchedules$guid[y]
   publishDate <- qowSchedules$endDate[y]+1
   if(weekdays(publishDate) != "Monday"){
@@ -47,7 +49,7 @@ qowSchedulesResults <- lapply(as.list(1:nrow(qowSchedules)), function(y){
       dd1$qow17q1 <- NULL
       dd <- rbind(dd1, dd2)
     } else{
-      return(NULL)
+      next
     }
   } else{
     dd <- synTableQuery(paste0('SELECT * FROM ', q$table.id[idx]))@values
@@ -75,6 +77,13 @@ qowSchedulesResults <- lapply(as.list(1:nrow(qowSchedules)), function(y){
   
   # return(res)
   allDone <- bridgeRestPOST('/v3/reports/weekly-survey', body=toJSON(res))
-  return(allDone)
-})
+  nn <- nn+1
+  cat(nn)
+}
 
+## UPDATE THE TRACKING TABLE IN SYNAPSE (ADD A ROW)
+updateTrackr <- data.frame(runDate = as.character(Sys.Date()),
+                           numQOWs = nn,
+                           stringsAsFactors=FALSE)
+
+reallyAllDone <- synStore(Table("syn7070736", updateTrackr))
